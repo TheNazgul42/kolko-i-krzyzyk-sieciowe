@@ -11,7 +11,7 @@ AVAILABLE_PLAYER_COLORS = ["#E74C3C", "#3498DB", "#2ECC71", "#F1C40F", "#9B59B6"
 BUTTON_BG_COLOR = "#2980B9"
 BUTTON_HOVER_BG_COLOR = "#3498DB"
 BUTTON_ACTIVE_BG_COLOR = "#1F618D"
-CELL_HOVER_COLOR = "#A9CCE3"  # Kolor podświetlenia komórki
+CELL_HOVER_COLOR = "#A9CCE3"
 
 
 # Funkcje pomocnicze do rysowania gradientu
@@ -85,16 +85,26 @@ class TicTacToeNetworkGame:
         self.winning_player_color = None;
         self.fireworks_duration = 5;
         self.fireworks_start_time = 0
-        self.animated_objects = {}  # Do śledzenia animacji znaków
-        self.current_hover_cell = None  # Do podświetlania komórek
-
+        self.animated_objects = {}
+        self.current_hover_cell = None
+        self.debug_id = "Host" if self.is_host else "Client"
+        print(f"[{self.debug_id}] Inicjalizacja TicTacToeNetworkGame.")
         self.setup_ui()
         if self.is_host:
             self.start_server()
         else:
             self.connect_to_server()
 
+    def _setup_button_hover(self, button):
+        button.bind("<Enter>", lambda e, b=button: b.config(bg=BUTTON_HOVER_BG_COLOR))
+        button.bind("<Leave>",
+                    lambda e, b=button: b.config(bg=BUTTON_BG_COLOR if b['state'] == tk.NORMAL else BUTTON_BG_COLOR))
+        button.bind("<ButtonPress-1>", lambda e, b=button: b.config(bg=BUTTON_ACTIVE_BG_COLOR))
+        button.bind("<ButtonRelease-1>", lambda e, b=button: b.config(
+            bg=BUTTON_HOVER_BG_COLOR if b['state'] == tk.NORMAL else BUTTON_BG_COLOR))
+
     def setup_ui(self):
+        print(f"[{self.debug_id}] setup_ui start.")
         self.game_frame = tk.Frame(self.master, bg="#2C3E50");
         self.game_frame.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
         self.status_label = tk.Label(self.game_frame, text="Inicjalizacja...", font=("Helvetica", 16, "bold"),
@@ -102,10 +112,9 @@ class TicTacToeNetworkGame:
         self.status_label.pack(pady=(0, 10))
         self.canvas = tk.Canvas(self.game_frame, width=300, height=300, highlightthickness=0);
         self.canvas.pack()
-        self.canvas.bind("<Button-1>", self.canvas_click)
-        self.canvas.bind("<Motion>", self.canvas_hover)  # Do podświetlania komórek
-        self.canvas.bind("<Leave>", self.canvas_leave)  # Do usunięcia podświetlenia
-
+        self.canvas.bind("<Button-1>", self.canvas_click);
+        self.canvas.bind("<Motion>", self.canvas_hover);
+        self.canvas.bind("<Leave>", self.canvas_leave)
         control_frame = tk.Frame(self.game_frame, bg="#2C3E50");
         control_frame.pack(pady=10)
         self.reset_button = tk.Button(control_frame, text="Reset gry", font=("Helvetica", 14, "bold"),
@@ -118,28 +127,16 @@ class TicTacToeNetworkGame:
                                      relief=tk.RAISED, command=self.exit_game)
         self.exit_button.grid(row=0, column=1, padx=10);
         self._setup_button_hover(self.exit_button)
-        self.draw_board_static()  # Rysuje tylko statyczną planszę na początku
-
-    def _setup_button_hover(self, button):
-        button.bind("<Enter>", lambda e, b=button: b.config(bg=BUTTON_HOVER_BG_COLOR))
-        button.bind("<Leave>", lambda e, b=button: b.config(bg=BUTTON_BG_COLOR if b[
-                                                                                      'state'] == tk.NORMAL else BUTTON_BG_COLOR))  # Powrót do normalnego lub szarego jeśli disabled
-        button.bind("<ButtonPress-1>", lambda e, b=button: b.config(bg=BUTTON_ACTIVE_BG_COLOR))
-        button.bind("<ButtonRelease-1>", lambda e, b=button: b.config(bg=BUTTON_HOVER_BG_COLOR))
+        self.draw_board_static()
+        print(f"[{self.debug_id}] setup_ui koniec.")
 
     def canvas_hover(self, event):
-        if self.game_over or not self.player_colors: return
+        if self.game_over or not self.player_colors: self.canvas.delete("hover_highlight"); return
         cell_size = 100;
         col, row = event.x // cell_size, event.y // cell_size
-
-        # Usuń poprzednie podświetlenie, jeśli istnieje
         self.canvas.delete("hover_highlight")
-
         if 0 <= row <= 2 and 0 <= col <= 2 and self.board[row][col] == "" and self.turn == self.my_mark:
-            x0, y0 = col * cell_size, row * cell_size
-            x1, y1 = x0 + cell_size, y0 + cell_size
-            # Rysuj podświetlenie - półprzezroczysty prostokąt lub obramowanie
-            # Dla prostoty, użyjemy obramowania, bo gradient tła komplikuje półprzezroczystość
+            x0, y0, x1, y1 = col * cell_size, row * cell_size, col * cell_size + cell_size, row * cell_size + cell_size
             self.canvas.create_rectangle(x0 + 2, y0 + 2, x1 - 2, y1 - 2, outline=CELL_HOVER_COLOR, width=2,
                                          tags="hover_highlight")
             self.current_hover_cell = (row, col)
@@ -147,11 +144,10 @@ class TicTacToeNetworkGame:
             self.current_hover_cell = None
 
     def canvas_leave(self, event):
-        self.canvas.delete("hover_highlight")
-        self.current_hover_cell = None
+        self.canvas.delete("hover_highlight"); self.current_hover_cell = None
 
-    def draw_board_static(self):  # Rysuje siatkę i gradient
-        self.canvas.delete("grid_lines")  # Usuwamy tylko linie, nie wszystko
+    def draw_board_static(self):
+        self.canvas.delete("grid_lines")
         width, height = 300, 300;
         draw_gradient(self.canvas, width, height, "#D7DDE8", "#F7F9FC")
         cell_size = 100
@@ -164,48 +160,38 @@ class TicTacToeNetworkGame:
                                                                                                   width=3,
                                                                                                   fill="#2980B9",
                                                                                                   tags="grid_lines")
-        # Przerysowanie istniejących znaków bez animacji (np. po resecie lub inicjalizacji)
         for r_idx, row_val in enumerate(self.board):
             for c_idx, mark in enumerate(row_val):
-                if mark and self.player_colors:
-                    self._draw_mark_at_scale(r_idx, c_idx, mark, self.player_colors.get(mark, "#000000"), 1.0,
-                                             f"mark_{r_idx}_{c_idx}")
+                if mark and self.player_colors: self._draw_mark_at_scale(r_idx, c_idx, mark,
+                                                                         self.player_colors.get(mark, "#000000"), 1.0,
+                                                                         f"mark_{r_idx}_{c_idx}")
 
     def _draw_mark_at_scale(self, r_idx, c_idx, mark_char, color, scale, tag):
-        self.canvas.delete(tag)  # Usuń poprzednią klatkę tego znaku
-        cell_size = 100
+        self.canvas.delete(tag)
+        cell_size = 100;
         center_x, center_y = c_idx * cell_size + cell_size / 2, r_idx * cell_size + cell_size / 2
-        size = (cell_size / 2 - 20) * scale  # 20 to margines
-
+        size = (cell_size / 2 - 20) * scale
         if mark_char == "X":
-            # Cień
             self.canvas.create_line(center_x - size + 2, center_y - size + 2, center_x + size + 2, center_y + size + 2,
                                     width=4, fill="#7f8c8d", tags=tag)
             self.canvas.create_line(center_x + size + 2, center_y - size + 2, center_x - size + 2, center_y + size + 2,
                                     width=4, fill="#7f8c8d", tags=tag)
-            # Główny znak
             self.canvas.create_line(center_x - size, center_y - size, center_x + size, center_y + size, width=4,
                                     fill=color, tags=tag)
             self.canvas.create_line(center_x + size, center_y - size, center_x - size, center_y + size, width=4,
                                     fill=color, tags=tag)
         elif mark_char == "O":
-            # Cień
             self.canvas.create_oval(center_x - size + 2, center_y - size + 2, center_x + size + 2, center_y + size + 2,
                                     width=4, outline="#7f8c8d", tags=tag)
-            # Główny znak
             self.canvas.create_oval(center_x - size, center_y - size, center_x + size, center_y + size, width=4,
                                     outline=color, tags=tag)
 
     def _animate_mark_placement(self, r_idx, c_idx, mark_char, color, current_step=0, max_steps=10, delay=20):
         tag = f"mark_{r_idx}_{c_idx}"
-        if current_step > max_steps:
-            self._draw_mark_at_scale(r_idx, c_idx, mark_char, color, 1.0, tag)  # Finalne dorysowanie
-            self.animated_objects.pop(tag, None)
-            return
-
-        scale = current_step / max_steps
+        if current_step > max_steps: self._draw_mark_at_scale(r_idx, c_idx, mark_char, color, 1.0,
+                                                              tag); self.animated_objects.pop(tag, None); return
+        scale = current_step / max_steps;
         self._draw_mark_at_scale(r_idx, c_idx, mark_char, color, scale, tag)
-
         anim_id = self.master.after(delay, self._animate_mark_placement, r_idx, c_idx, mark_char, color,
                                     current_step + 1, max_steps, delay)
         self.animated_objects[tag] = anim_id
@@ -216,45 +202,48 @@ class TicTacToeNetworkGame:
         col, row = event.x // cell_size, event.y // cell_size
         if not (0 <= row <= 2 and 0 <= col <= 2) or self.board[row][col] != "": return
         if self.turn != self.my_mark: self.status_label.config(text="Nie twój ruch!"); return
-
-        # Anuluj poprzednią animację dla tego pola jeśli jakaś była (mało prawdopodobne, ale bezpieczne)
         tag = f"mark_{row}_{col}"
         if tag in self.animated_objects: self.master.after_cancel(
             self.animated_objects[tag]); self.animated_objects.pop(tag)
-
-        # Ustawiamy znak w logice planszy
         self.board[row][col] = self.my_mark
-        # Rozpoczynamy animację rysowania
         self._animate_mark_placement(row, col, self.my_mark, self.player_colors.get(self.my_mark, "#000000"))
+        self._check_game_state_after_move(self.my_mark)
+        if not self.game_over: self.send_message(f"MOVE|{row}|{col}")
 
-        # Sprawdzenie stanu gry i zmiana tury (bezpośrednio po logice, nie czeka na koniec animacji)
-        self._check_game_state_after_move(self.my_mark)  # Ta funkcja musi być wywołana po ustawieniu self.board
-        if not self.game_over:  # Wyślij ruch tylko jeśli gra się nie zakończyła
-            self.send_message(f"MOVE|{row}|{col}")
-
-    def make_move(self, r, c, mark):  # Wywoływane po otrzymaniu ruchu od przeciwnika
+    def make_move(self, r, c, mark):
         if self.board[r][c] == "" and not self.game_over:
-            self.board[r][c] = mark  # Ustaw logikę
-            # Rozpocznij animację dla ruchu przeciwnika
+            self.board[r][c] = mark
             self._animate_mark_placement(r, c, mark, self.player_colors.get(mark, "#000000"))
-            self._check_game_state_after_move(mark)  # Sprawdź stan gry
+            self._check_game_state_after_move(mark)
 
     def _check_game_state_after_move(self, mark_just_placed):
         winner_info = self.get_winner_info(mark_just_placed)
         if winner_info:
-            winner_mark, winner_color = winner_info[0], self.player_colors.get(winner_info[0], "#27AE60")
-            self.status_label.config(text=f"🎉 Gracz {winner_mark} ZWYCIĘŻA! 🎉", font=("Helvetica", 20, "bold"),
-                                     fg=winner_color)
-            self.animate_winning_line(winner_info, winner_color)  # Zamiast draw_winning_line
             self.game_over = True;
-            self.trigger_victory_celebration(winner_color)
+            winner_mark, winner_color = winner_info[0], self.player_colors.get(winner_info[0], "#27AE60")
+            if self.my_mark == winner_mark:  # Wygrałem
+                self.status_label.config(text=f"🎉 TY WYGRAŁEŚ/AŚ! 🎉", font=("Helvetica", 20, "bold"), fg=winner_color)
+                self.animate_winning_line(winner_info, winner_color);
+                self.trigger_victory_celebration(winner_color)
+                self.send_message(f"YOU_LOST|{winner_mark}")
+                print(f"[{self.debug_id}] Wygrałem. Wysyłam YOU_LOST.")
+            else:  # Przegrałem (przeciwnik wykonał zwycięski ruch, który właśnie przetworzyłem)
+                print(
+                    f"[{self.debug_id}] Przeciwnik ({winner_mark}) wygrał. Rysuję jego linię. Moja etykieta zostanie zaktualizowana przez YOU_LOST.")
+                self.animate_winning_line(winner_info, winner_color)  # Rysuj linię zwycięzcy na mojej planszy
+                # Komunikat o przegranej i efekt porażki zostaną obsłużone przez process_message("YOU_LOST")
         elif self.is_board_full():
-            self.status_label.config(text="Remis!", font=("Helvetica", 18, "bold"));
-            self.game_over = True
-        else:  # Zmiana tury tylko jeśli gra nie jest zakończona
-            self.turn = self.other_mark if self.turn == self.my_mark else self.my_mark
+            self.game_over = True;
+            self.status_label.config(text="REMIS!", font=("Helvetica", 18, "bold"))
+            if mark_just_placed == self.my_mark: self.send_message(
+                "DRAW")  # Tylko gracz wykonujący ruch wysyła info o remisie
+            print(f"[{self.debug_id}] Remis.")
+        else:  # Gra kontynuuje
+            self.game_over = False
+            self.turn = self.other_mark if mark_just_placed == self.my_mark else self.my_mark
             turn_text = "Twój ruch" if self.turn == self.my_mark else "Ruch przeciwnika"
             self.status_label.config(text=turn_text, font=("Helvetica", 16, "bold"), fg="white")
+            print(f"[{self.debug_id}] Gra kontynuowana. Tura dla: {self.turn}.")
 
     def get_winner_info(self, mark):
         for i in range(3):
@@ -265,7 +254,7 @@ class TicTacToeNetworkGame:
         return None
 
     def animate_winning_line(self, winner_info, color="#27AE60", steps=20, delay=15):
-        self.canvas.delete("win_line")  # Usuń starą linię, jeśli jest
+        self.canvas.delete("win_line_segment")
         cell_size = 100;
         _, win_type, index = winner_info;
         padding = 10
@@ -276,39 +265,41 @@ class TicTacToeNetworkGame:
         elif win_type == "diag":
             x_start, y_start, x_end, y_end = padding, padding, 300 - padding, 300 - padding
         else:
-            x_start, y_start, x_end, y_end = 300 - padding, padding, padding, 300 - padding  # antidiag
-
-        dx = (x_end - x_start) / steps
+            x_start, y_start, x_end, y_end = 300 - padding, padding, padding, 300 - padding
+        dx = (x_end - x_start) / steps;
         dy = (y_end - y_start) / steps
 
         def _draw_segment(current_step):
             if current_step > steps: return
-            curr_x = x_start + dx * current_step
-            curr_y = y_start + dy * current_step
-            # Rysuj odcinek od poprzedniego punktu do aktualnego
-            prev_x = x_start + dx * (current_step - 1)
-            prev_y = y_start + dy * (current_step - 1)
-            if current_step > 0:  # Nie rysuj nic dla kroku 0, zacznij od 1
-                self.canvas.create_line(prev_x, prev_y, curr_x, curr_y, width=5, fill=color,
-                                        tags="win_line_segment")  # Użyj innego tagu, by nie kasować całości
+            curr_x, curr_y = x_start + dx * current_step, y_start + dy * current_step
+            prev_x, prev_y = x_start + dx * (current_step - 1), y_start + dy * (current_step - 1)
+            if current_step > 0: self.canvas.create_line(prev_x, prev_y, curr_x, curr_y, width=5, fill=color,
+                                                         tags="win_line_segment")
             self.master.after(delay, _draw_segment, current_step + 1)
 
-        _draw_segment(1)  # Zacznij od kroku 1
+        _draw_segment(1)
+
+    def _show_defeat_effect(self):
+        if hasattr(self, 'canvas') and self.canvas.winfo_exists():
+            self.canvas.delete("defeat_text_overlay")
+            self.canvas.create_text(150 + 2, 150 + 2, text="PRZEGRANA", font=("Helvetica", 40, "bold"), fill="#A04040",
+                                    tags="defeat_text_overlay", anchor=tk.CENTER)  # Cień
+            self.canvas.create_text(150, 150, text="PRZEGRANA", font=("Helvetica", 40, "bold"), fill="#E74C3C",
+                                    tags="defeat_text_overlay", anchor=tk.CENTER)  # Główny tekst
+            self.canvas.tag_raise("defeat_text_overlay")
+            print(f"[{self.debug_id}] Efekt porażki (tekst) zastosowany.")
 
     def is_board_full(self):
         return all(self.board[i][j] != "" for i in range(3) for j in range(3))
 
     def reset_board(self):
         self.board = [["" for _ in range(3)] for _ in range(3)]
-        self.canvas.delete("win_line_segment")  # Usuń segmenty linii wygrywającej
-        self.canvas.delete("hover_highlight")
-        # Usuń wszystkie dynamicznie rysowane znaki
+        self.canvas.delete("win_line_segment");
+        self.canvas.delete("hover_highlight");
+        self.canvas.delete("defeat_text_overlay")
         for r in range(3):
-            for c in range(3):
-                self.canvas.delete(f"mark_{r}_{c}")
-                self.animated_objects.pop(f"mark_{r}_{c}", None)  # Usuń z listy animowanych
-
-        self.draw_board_static()  # Odśwież statyczną planszę
+            for c in range(3): self.canvas.delete(f"mark_{r}_{c}"); self.animated_objects.pop(f"mark_{r}_{c}", None)
+        self.draw_board_static();
         self.game_over = False;
         self.stop_fireworks_display()
 
@@ -316,8 +307,7 @@ class TicTacToeNetworkGame:
         if self.reset_pending: return
         self.reset_pending = True;
         self.status_label.config(text="Wysłano prośbę o reset...", fg="white");
-        self.reset_button.config(state=tk.DISABLED,
-                                 bg=BUTTON_BG_COLOR)  # Ustaw BG na normalny, bo stan DISABLED ma swój
+        self.reset_button.config(state=tk.DISABLED, bg=BUTTON_BG_COLOR)
         self.send_message("RESET_REQUEST", connection=self.conn if self.is_host else None)
 
     def ask_reset_confirmation(self):
@@ -338,13 +328,14 @@ class TicTacToeNetworkGame:
 
         btn_frame = tk.Frame(dialog, bg="#2C3E50");
         btn_frame.pack(pady=10)
-        # Przyciski w dialogu też mogą mieć hover
         accept_btn = tk.Button(btn_frame, text="Tak", font=("Helvetica", 12, "bold"), bg="#27AE60", fg="white",
                                activebackground="#229954", command=accept);
-        accept_btn.pack(side=tk.LEFT, padx=5)
+        accept_btn.pack(side=tk.LEFT, padx=5);
+        self._setup_button_hover(accept_btn)
         reject_btn = tk.Button(btn_frame, text="Nie", font=("Helvetica", 12, "bold"), bg="#C0392B", fg="white",
                                activebackground="#A93226", command=reject);
-        reject_btn.pack(side=tk.LEFT, padx=5)
+        reject_btn.pack(side=tk.LEFT, padx=5);
+        self._setup_button_hover(reject_btn)
         dialog.transient(self.master);
         dialog.grab_set();
         self.master.wait_window(dialog)
@@ -361,46 +352,73 @@ class TicTacToeNetworkGame:
     def send_message(self, message, connection=None):
         sock_to_use = self.conn if self.is_host else self.sock
         if connection is not None: sock_to_use = connection
+        role = self.debug_id;
+        target_info = "N/A"
         if sock_to_use:
             try:
-                sock_to_use.sendall((message + "\n").encode())
+                target_info = str(sock_to_use.getpeername())
+            except:
+                pass  # Błędy są możliwe jeśli socket jest już zamknięty
+        print(f"[{role} SENDING] Do: {target_info}, Wiadomość: '{message}'")
+        if sock_to_use:
+            try:
+                sock_to_use.sendall((message + "\n").encode()); print(f"[{role} SENT OK] '{message}'")
             except Exception as e:
-                print(f"SEND FAIL: {e} for '{message}'")
+                print(f"[{role} SEND FAIL] '{message}' do {target_info}: {e}")
         else:
-            print(f"SEND FAIL: No socket for '{message}'")
+            print(f"[{role} SEND FAIL] Brak socketa dla '{message}'")
 
     def receive_messages(self, sock):
-        buffer = ""
+        buffer = "";
+        role = self.debug_id
+        print(f"[{role} RECV THREAD STARTED] Socket: {sock.getsockname() if hasattr(sock, 'getsockname') else 'N/A'}")
         while True:
             try:
                 data = sock.recv(BUFFER_SIZE)
             except socket.timeout:
-                continue  # Jeśli socket ma timeout
+                print(f"[{role} RECV TIMEOUT]"); continue
             except Exception as e:
-                print(f"RECV ERROR: {e}"); break
-            if not data: print(f"RECV: Connection closed."); break
-            buffer += data.decode('utf-8', 'ignore')
+                print(f"[{role} RECV ERROR]: {e}"); break
+            if not data: print(f"[{role} RECV] Połączenie zamknięte."); break
+            buffer += data.decode('utf-8', 'ignore');
+            print(f"[{role} RECV BUFFER]: '{buffer}'")
             while "\n" in buffer:
                 line, buffer = buffer.split("\n", 1);
                 line_to_process = line.strip()
+                print(f"[{role} RECV PROC LINE]: '{line_to_process}'")
                 self.master.after(0, self.process_message, line_to_process)
+        print(f"[{role} RECV THREAD ENDED]")
         if hasattr(self, 'game_frame') and self.game_frame.winfo_exists(): self.master.after(100, self.exit_game)
 
     def process_message(self, message):
+        role = self.debug_id;
+        print(f"[{role} PROCESSING MSG] Wiadomość: '{message}'")
         parts = message.split("|");
         cmd = parts[0]
         if cmd == "START":
             self.turn = parts[1];
             self.player_colors['X'] = parts[2];
             self.player_colors['O'] = parts[3]
-            self.reset_board()  # Czyści planszę i rysuje ją na nowo (bez znaków)
+            self.reset_board()
             turn_text = "Twój ruch" if self.turn == self.my_mark else "Ruch przeciwnika"
             self.status_label.config(text=turn_text, font=("Helvetica", 16, "bold"), fg="white")
+            print(f"[{role} PROC START] Tura: {self.turn}. Kolory: X={parts[2]}, O={parts[3]}.")
         elif cmd == "MOVE":
             try:
                 r, c = int(parts[1]), int(parts[2]); self.make_move(r, c, self.other_mark)
             except (ValueError, IndexError) as e:
-                print(f"PROC MOVE ERR: {message}, {e}"); return
+                print(f"[{role} PROC MOVE ERR]: {message}, {e}"); return
+        elif cmd == "YOU_LOST":
+            winner_mark = parts[1] if len(parts) > 1 else "Przeciwnik"
+            self.status_label.config(text=f"😢 PRZEGRAŁEŚ/AŚ! Wygrał: {winner_mark} 😢", font=("Helvetica", 18, "bold"),
+                                     fg="#E74C3C")
+            self.game_over = True;
+            self._show_defeat_effect()
+            print(f"[{role} PROC YOU_LOST] Przegrana. Wygrał: {winner_mark}.")
+        elif cmd == "DRAW":
+            self.status_label.config(text="REMIS!", font=("Helvetica", 18, "bold"), fg="white");
+            self.game_over = True
+            print(f"[{role} PROC DRAW] Remis.")
         elif cmd == "RESET_REQUEST":
             if not self.reset_pending:
                 self.reset_pending = True; self.ask_reset_confirmation()
@@ -413,57 +431,74 @@ class TicTacToeNetworkGame:
                                                                 fg="white");self.reset_button.config(state=tk.NORMAL,
                                                                                                      bg=BUTTON_BG_COLOR)
         else:
-            print(f"PROC UNKNOWN CMD: '{cmd}' in '{message}'")
+            print(f"[{role} PROC UNKNOWN CMD]: '{cmd}' w '{message}'")
 
     def connect_to_server(self):
+        print(f"[{self.debug_id}] connect_to_server: IP={self.host_ip}, Port={self.host_port}")
         self.my_mark, self.other_mark = "O", "X";
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             self.sock.connect((self.host_ip, self.host_port));
             self.sock.settimeout(5.0)
+            print(f"[{self.debug_id}] Połączono z serwerem. Lokalny socket: {self.sock.getsockname()}")
             self.status_label.config(text="Połączono. Oczekiwanie na start...", fg="white")
-            threading.Thread(target=self.receive_messages, args=(self.sock,), daemon=True).start()
+            threading.Thread(target=self.receive_messages, args=(self.sock,), daemon=True,
+                             name=f"{self.debug_id}ReceiveThread").start()
         except Exception as e:
-            self.status_label.config(text=f"Błąd połączenia: {e}", fg="red");self.master.after(2000, self.exit_game)
+            print(f"[{self.debug_id}] Błąd połączenia: {e}"); self.status_label.config(text=f"Błąd połączenia: {e}",
+                                                                                       fg="red");self.master.after(2000,
+                                                                                                                   self.exit_game)
 
     def assign_colors_and_turn(self):
+        print(f"[{self.debug_id}] assign_colors_and_turn.")
         color_x = random.choice(AVAILABLE_PLAYER_COLORS);
         available_colors_for_o = [c for c in AVAILABLE_PLAYER_COLORS if c != color_x];
         color_o = random.choice(available_colors_for_o) if available_colors_for_o else "#17A589"
         self.player_colors['X'], self.player_colors['O'] = color_x, color_o;
         first_turn = random.choice(["X", "O"]);
         self.turn = first_turn
-        self.reset_board()  # Resetuje i rysuje pustą planszę
+        self.reset_board()
+        print(f"[{self.debug_id}] Wylosowano: Tura={self.turn}, Kolor X={color_x}, Kolor O={color_o}")
         if self.conn:
             self.send_message(f"START|{self.turn}|{color_x}|{color_o}", connection=self.conn)
             turn_text = "Losowanie: Zaczynasz!" if self.turn == self.my_mark else "Losowanie: Przeciwnik zaczyna."
             self.status_label.config(text=turn_text, font=("Helvetica", 16, "bold"), fg="white")
+        else:
+            print(f"[{self.debug_id}] assign_colors_and_turn: self.conn jest None.")
 
     def start_server(self):
+        print(f"[{self.debug_id}] start_server.")
         self.my_mark, self.other_mark = "X", "O";
         self.port = get_free_port();
         local_ip = get_local_ip()
         self.status_label.config(text=f"Hostujesz grę.\nIP: {local_ip} Port: {self.port}\nOczekiwanie...",
                                  font=("Helvetica", 14), fg="white")
-        threading.Thread(target=self.server_thread, daemon=True).start()
+        print(f"[{self.debug_id}] Serwer startuje na IP: {local_ip}, Port: {self.port}")
+        threading.Thread(target=self.server_thread, daemon=True, name=f"{self.debug_id}ServerThread").start()
 
     def server_thread(self):
+        print(f"[{self.debug_id} SERVER THREAD] Start.")
         server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM);
         server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             server_sock.bind(("", self.port))
         except Exception as e:
-            self.status_label.config(text=f"Błąd portu: {e}", fg="red");return
-        server_sock.listen(1)
+            print(f"[{self.debug_id} SERVER THREAD] Błąd bindowania portu {self.port}: {e}");self.status_label.config(
+                text=f"Błąd portu: {e}", fg="red");return
+        server_sock.listen(1);
+        print(f"[{self.debug_id} SERVER THREAD] Nasłuch na porcie {self.port}")
         try:
             self.conn, addr = server_sock.accept();
             self.conn.settimeout(5.0)
+            print(f"[{self.debug_id} SERVER THREAD] Połączono z: {addr}. self.conn={self.conn}")
             self.assign_colors_and_turn()
-            threading.Thread(target=self.receive_messages, args=(self.conn,), daemon=True).start()
+            threading.Thread(target=self.receive_messages, args=(self.conn,), daemon=True,
+                             name=f"{self.debug_id}HostReceiveThread").start()
         except Exception as e:
-            self.status_label.config(text=f"Błąd połączenia: {e}", fg="red")
+            print(f"[{self.debug_id} SERVER THREAD] Błąd akceptacji: {e}");self.status_label.config(
+                text=f"Błąd połączenia: {e}", fg="red")
         finally:
-            server_sock.close()
+            print(f"[{self.debug_id} SERVER THREAD] Zamykanie socketa serwera."); server_sock.close()
 
     def trigger_victory_celebration(self, winner_color):
         self.winning_player_color = winner_color;self.fireworks_active = True;self.fireworks_start_time = time.time();self.fireworks_particles.clear();self.canvas.delete(
@@ -476,23 +511,23 @@ class TicTacToeNetworkGame:
         if random.random() < 0.15: bx, by = random.randint(50, 250), random.randint(50,
                                                                                     150);self._create_firework_burst(bx,
                                                                                                                      by,
-                                                                                                                     self.winning_player_color)  # Zwiększona szansa
+                                                                                                                     self.winning_player_color)
         self.canvas.delete("firework");
         new_particles = []
         for p in self.fireworks_particles:
             p['x'] += p['vx'];
             p['y'] += p['vy'];
             p['vy'] += 0.1;
-            p['life'] -= random.uniform(0.5, 1.5)  # Zróżnicowane zanikanie
+            p['life'] -= random.uniform(0.5, 1.5)
             if p['life'] > 0: new_particles.append(p);size = p['size'] * (
                         p['life'] / p['max_life']);self.canvas.create_oval(p['x'] - size, p['y'] - size, p['x'] + size,
                                                                            p['y'] + size, fill=p['color'],
                                                                            outline=p['color'], tags="firework")
         self.fireworks_particles = new_particles;
-        self.fireworks_animation_id = self.master.after(40, self._animate_fireworks)  # Szybsza animacja
+        self.fireworks_animation_id = self.master.after(40, self._animate_fireworks)
 
     def _create_firework_burst(self, x, y, base_color):
-        num_particles = random.randint(30, 50)  # Więcej cząstek
+        num_particles = random.randint(30, 50)
         for _ in range(num_particles): angle = random.uniform(0, 2 * math.pi);speed = random.uniform(1,
                                                                                                      5);life = random.randint(
             25, 50);self.fireworks_particles.append(
@@ -505,15 +540,18 @@ class TicTacToeNetworkGame:
             "firework")
 
     def exit_game(self):
+        print(f"[{self.debug_id}] exit_game: Zamykanie.")
         self.stop_fireworks_display()
-        # Anuluj wszystkie oczekujące animacje znaków
-        for anim_id in self.animated_objects.values(): self.master.after_cancel(anim_id)
+        for anim_id in list(self.animated_objects.values()): self.master.after_cancel(
+            anim_id)  # Użyj list() do iteracji po kopii
         self.animated_objects.clear()
         try:
-            if self.is_host and self.conn: self.conn.close(); self.conn = None
-            if not self.is_host and self.sock: self.sock.close(); self.sock = None
+            if self.is_host and self.conn: print(
+                f"[{self.debug_id}] Zamykanie self.conn."); self.conn.close(); self.conn = None
+            if not self.is_host and self.sock: print(
+                f"[{self.debug_id}] Zamykanie self.sock."); self.sock.close(); self.sock = None
         except Exception as e:
-            print(f"EXIT ERR: {e}")
+            print(f"[{self.debug_id}] Błąd zamykania socketu w exit_game: {e}")
         if hasattr(self, 'game_frame') and self.game_frame.winfo_exists(): self.game_frame.destroy()
         if self.on_game_end: self.on_game_end()
 
@@ -534,7 +572,6 @@ class MainMenu:
                  fg="white").pack(pady=10)
         button_frame = tk.Frame(self.menu_frame, bg="#2C3E50");
         button_frame.pack(pady=20)
-
         self.host_button = tk.Button(button_frame, text="Hostuj grę", font=("Helvetica", 16, "bold"), width=15,
                                      bg=BUTTON_BG_COLOR, fg="white", activebackground=BUTTON_ACTIVE_BG_COLOR,
                                      relief=tk.RAISED, command=self.host_game);
@@ -551,13 +588,11 @@ class MainMenu:
         self.exit_button.pack(pady=10);
         self._setup_button_hover(self.exit_button)
 
-    def _setup_button_hover(self, button):  # Metoda pomocnicza dla MainMenu
+    def _setup_button_hover(self, button):
         button.bind("<Enter>", lambda e, b=button: b.config(bg=BUTTON_HOVER_BG_COLOR))
         button.bind("<Leave>", lambda e, b=button: b.config(bg=BUTTON_BG_COLOR))
-        button.bind("<ButtonPress-1>",
-                    lambda e, b=button: b.config(bg=BUTTON_ACTIVE_BG_COLOR))  # Ciemniejszy przy kliknięciu
-        button.bind("<ButtonRelease-1>",
-                    lambda e, b=button: b.config(bg=BUTTON_HOVER_BG_COLOR))  # Powrót do hover po puszczeniu
+        button.bind("<ButtonPress-1>", lambda e, b=button: b.config(bg=BUTTON_ACTIVE_BG_COLOR))
+        button.bind("<ButtonRelease-1>", lambda e, b=button: b.config(bg=BUTTON_HOVER_BG_COLOR))
 
     def draw_logo(self, canvas):
         canvas.delete("all");
@@ -590,8 +625,7 @@ class MainMenu:
             pady=30)
         tk.Label(join_frame, text="Host IP:", font=("Helvetica", 16), bg="#2C3E50", fg="white").pack(pady=5);
         ip_entry = tk.Entry(join_frame, font=("Helvetica", 16), width=20, justify='center');
-        ip_entry.pack(pady=5);
-        ip_entry.insert(0, "127.0.0.1")  # Domyślnie localhost
+        ip_entry.pack(pady=5)  # Usunięto .insert(0, "127.0.0.1")
         tk.Label(join_frame, text="Port:", font=("Helvetica", 16), bg="#2C3E50", fg="white").pack(pady=5);
         port_entry = tk.Entry(join_frame, font=("Helvetica", 16), width=10, justify='center');
         port_entry.pack(pady=5)
@@ -605,6 +639,7 @@ class MainMenu:
                 host_port = int(port_str);assert 1024 <= host_port <= 65535
             except(ValueError, AssertionError):
                 status_join_label.config(text="Błędny port (1024-65535)!");return
+            print(f"[MainMenu] Próba połączenia jako klient do {host_ip}:{host_port}")
             join_frame.destroy();
             TicTacToeNetworkGame(self.master, is_host=False, host_ip=host_ip, host_port=host_port,
                                  on_game_end=self.show_menu)
@@ -624,14 +659,17 @@ class MainMenu:
         frame.destroy();self.show_menu()
 
     def show_menu(self):
+        print("[MainMenu] Pokazywanie menu głównego.")
         for widget in self.master.winfo_children(): widget.destroy()
         MainMenu(self.master)
 
 
 def main():
+    print("Uruchamianie aplikacji Kółko i Krzyżyk.")
     root = tk.Tk()
     MainMenu(root)
     root.mainloop()
+    print("Zamykanie aplikacji Kółko i Krzyżyk.")
 
 
 if __name__ == "__main__":
