@@ -410,7 +410,7 @@ class TicTacToeNetworkGame:
                 print(f"[{role} PROC MOVE ERR]: {message}, {e}"); return
         elif cmd == "YOU_LOST":
             winner_mark = parts[1] if len(parts) > 1 else "Przeciwnik"
-            self.status_label.config(text=f"😢 PRZEGRAŁEŚ/AŚ! Wygrał: {winner_mark} 😢", font=("Helvetica", 18, "bold"),
+            self.status_label.config(text=f"PRZEGRAŁEŚ/AŚ! Wygrał: {winner_mark}", font=("Helvetica", 18, "bold"),
                                      fg="#E74C3C")
             self.game_over = True;
             self._show_defeat_effect()
