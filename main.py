@@ -282,9 +282,9 @@ class TicTacToeNetworkGame:
     def _show_defeat_effect(self):
         if hasattr(self, 'canvas') and self.canvas.winfo_exists():
             self.canvas.delete("defeat_text_overlay")
-            self.canvas.create_text(150 + 2, 150 + 2, text="PRZEGRANA", font=("Helvetica", 40, "bold"), fill="#A04040",
+            self.canvas.create_text(150 + 2, 150 + 2, text="PRZEGRANA", font=("Helvetica", 30, "bold"), fill="#A04040",
                                     tags="defeat_text_overlay", anchor=tk.CENTER)  # Cień
-            self.canvas.create_text(150, 150, text="PRZEGRANA", font=("Helvetica", 40, "bold"), fill="#E74C3C",
+            self.canvas.create_text(150, 150, text="PRZEGRANA", font=("Helvetica", 30, "bold"), fill="#E74C3C",
                                     tags="defeat_text_overlay", anchor=tk.CENTER)  # Główny tekst
             self.canvas.tag_raise("defeat_text_overlay")
             print(f"[{self.debug_id}] Efekt porażki (tekst) zastosowany.")
